@@ -169,7 +169,118 @@ export default function App() {
     setStep(0);
     setMessages([{
       role: "assistant",
-< truncated lines 172-283 >
+      text: demoResponses.welcome,
+    }]);
+    setScreen("thema");
+  }, []);
+
+  const submitThema = useCallback(() => {
+    if (!input.trim()) return;
+    const t = input.trim();
+    setThema(t);
+    setInput("");
+
+    let firstQuestion;
+    if (mode === "schnell") {
+      firstQuestion = demoResponses.schnell(t);
+    } else if (mode === "verstehen") {
+      firstQuestion = demoResponses.verstehen[0](t);
+    } else {
+      firstQuestion = demoResponses.entwickeln[0](t);
+    }
+
+    setMessages(prev => [
+      ...prev,
+      { role: "user", text: t },
+      { role: "assistant", text: firstQuestion },
+    ]);
+    setStep(1);
+    setScreen("chat");
+  }, [input, mode]);
+
+  const send = useCallback(async () => {
+    if (!input.trim() || loading) return;
+    const userText = input.trim();
+    setInput("");
+    setLoading(true);
+
+    const newMessages = [...messages, { role: "user", text: userText }];
+    setMessages(newMessages);
+
+    try {
+      let assistantText;
+
+      if (useLive && apiKey) {
+        // Live API-Modus
+        const apiMessages = newMessages.map(m => ({
+          role: m.role,
+          content: m.text,
+        }));
+        assistantText = await callClaude(apiMessages, apiKey);
+      } else {
+        // Demo-Modus
+        await new Promise(r => setTimeout(r, 600));
+        if (mode === "schnell") {
+          assistantText = `Du hast geantwortet: "${userText}"\n\nInteressant. Aber hast du auch die entgegengesetzte Position ernsthaft erwogen? Was spricht dafür?`;
+        } else if (mode === "verstehen") {
+          const idx = Math.min(step, demoResponses.verstehen.length - 1);
+          assistantText = demoResponses.verstehen[idx]();
+        } else {
+          const idx = Math.min(step, demoResponses.entwickeln.length - 1);
+          assistantText = demoResponses.entwickeln[idx]();
+        }
+      }
+
+      setMessages(prev => [...prev, { role: "assistant", text: assistantText }]);
+      setStep(s => s + 1);
+    } catch (e) {
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        text: `⚠️ Fehler: ${e.message}\n\nPrüfe deinen API-Key oder wechsle in den Demo-Modus.`,
+      }]);
+    } finally {
+      setLoading(false);
+    }
+  }, [input, loading, messages, mode, step, useLive, apiKey]);
+
+  const reset = () => {
+    setScreen("welcome");
+    setMode(null);
+    setMessages([]);
+    setStep(0);
+    setThema("");
+    setInput("");
+  };
+
+  const stepLabels = {
+    verstehen: ["Wissensstand", "Interesse", "Perspektiven", "Meta-Check", "Kernfrage", "Reflexion", "Validierung"],
+    entwickeln: ["Brainstorm 1", "Brainstorm 2", "Brainstorm 3", "Muster", "Prüfung", "Verfeinerung", "Abschluss"],
+  };
+
+  // ── Screens ────────────────────────────────────────────────
+
+  if (screen === "welcome") return (
+    <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem", fontFamily: "'Georgia', serif" }}>
+      <div style={{ maxWidth: "540px", width: "100%", textAlign: "center" }}>
+        <div style={{ fontSize: "0.65rem", color: C.textMuted, letterSpacing: "0.4em", marginBottom: "1rem" }}>
+          SAPERE AUDE
+        </div>
+        <h1 style={{ fontSize: "2.8rem", color: C.text, fontWeight: 700, lineHeight: 1.1, marginBottom: "0.5rem" }}>
+          Epistemischer<br />Assistent
+        </h1>
+        <div style={{ fontSize: "0.85rem", color: C.textMuted, marginBottom: "3rem" }}>
+          Werkzeug für kritisches Denken — kein Ersatz für es.
+        </div>
+
+        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: "12px", padding: "1.5rem", marginBottom: "2rem", textAlign: "left", fontSize: "0.85rem", color: C.textDim, lineHeight: 1.7 }}>
+          <strong style={{ color: C.text }}>Was dieses System tut:</strong><br />
+          Es stellt Fragen. Immer nur eine. Es gibt keine Antworten, die du nicht selbst erarbeiten könntest.<br /><br />
+          <strong style={{ color: C.text }}>Was es nicht tut:</strong><br />
+          Es denkt nicht für dich. Es lobt dich nicht. Es gibt dir keine Sicherheit.
+        </div>
+
+        {/* API Key Bereich */}
+        <div style={{ background: C.surfaceAlt, border: `1px solid ${C.border}`, borderRadius: "8px", padding: "1rem", marginBottom: "1.5rem", textAlign: "left" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: showApiInput ? "0.75rem" : 0 }}>
             <span style={{ fontSize: "0.75rem", color: C.textMuted }}>
               {useLive && apiKey ? "🟢 Live-Modus aktiv" : "⚪ Demo-Modus"}
